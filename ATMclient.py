@@ -6,14 +6,14 @@ import sys
 from encryption_algorithms import encrypt_AES, decrypt_AES, derive_keys, verify_hmac
 
 def authenticate_bank(client_socket):
-    # (1) Prompt user for username and password
+    # Prompt user for username and password
     new_user, username, password = get_credentials()
-    # (2) Authenticate user to bank, send challenge
+    # Authenticate user to bank, send challenge
     challenge = os.urandom(16)
     plaintext = f'{username}||{password}||{new_user}||{challenge.hex()}'
     nonce, tag, cipher = encrypt_AES(plaintext)
     client_socket.send(nonce + tag + cipher)
-    # (2) Authenticate bank server to ATM via challenge received
+    # Authenticate bank server to ATM via challenge received
     data = client_socket.recv(1024)
     nonce, tag, cipher = extract_data(data)
     plaintext = decrypt_AES(nonce, tag, cipher)
@@ -115,17 +115,17 @@ def main():
         
         authenticate_bank(client_socket)
         
-        # (2) Receive secret master key
+        # Receive secret master key
         data = client_socket.recv(1024)
         nonce, tag, cipher = extract_data(data)
         master_secret_key = decrypt_AES(nonce, tag, cipher, False)
         print(f'Received master secret key, {master_secret_key.hex()}')
 
-        # (3) Derive encryption key and MAC from master secret key
+        # Derive encryption key and MAC from master secret key
         encryption_key, mac_key = derive_keys(master_secret_key)
         print(f'Derived key-set\nEncryption_key, {encryption_key.hex()} \nMac_key, {mac_key.hex()}')
 
-        # (4) Deposits, withdrawals, and balance inquiries
+        # Deposits, withdrawals, and balance inquiries
         interact(client_socket, encryption_key, mac_key)
 
     except Exception as e:

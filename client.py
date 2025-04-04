@@ -32,7 +32,7 @@ class Client:
 
     def get_transactions(self):
         for transaction in self.transactions:
-            print(f'  {transaction.hex()}')
+            print(f' Transaction Hex: {transaction.hex()}')
         print(f'Balance is {self.balance}')
         return self.transactions
 

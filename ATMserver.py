@@ -7,56 +7,88 @@ from encryption_algorithms import encrypt_AES, decrypt_AES, derive_keys, verify_
 clients = []
 
 def authenticate_client(client_socket):
-    # (2) Authenticate ATM user to bank server
+    # Authenticate ATM user to bank server
     data = client_socket.recv(1024)
     if not data:
-        print(f'Client disconnected')
+        print('Client disconnected')
     nonce, tag, cipher = extract_data(data)
     plaintext = decrypt_AES(nonce, tag, cipher)
-    # (2) Authenticate bank server by answering challenge
+    # Authenticate bank server by answering challenge
     username, password, new_user, challenge = plaintext.split('||', 3)
     index = -1
     # Adding a new user
     if new_user == 'y': 
         index = add_user(username, password)
-        if index < 0: plaintext = f'Error: Username already in use {username}||{challenge}'
-        else: plaintext = f'Authenticated {username}||{challenge}'
+        if index < 0:
+            plaintext = f'Error: Username already in use {username}||{challenge}'
+        else:
+            plaintext = f'Authenticated {username}||{challenge}'
+            print(f"User '{username}' authenticated to bank server (new user).")
+            print("Bank server authenticated to ATM.")
         nonce, tag, cipher = encrypt_AES(plaintext)
         client_socket.send(nonce + tag + cipher)
-        if 'Error' in plaintext: return authenticate_client(client_socket)
+        if 'Error' in plaintext:
+            return authenticate_client(client_socket)
         return index, True
     # Verifying an existing user
     else: 
         index = check_credentials(username, password)
-        if index < 0: plaintext = f'Error: Incorrect username or password {username}||{challenge}'
-        else: plaintext = f'Authenticated {username}||{challenge}'
+        if index < 0:
+            plaintext = f'Error: Incorrect username or password {username}||{challenge}'
+        else:
+            plaintext = f'Authenticated {username}||{challenge}'
+            print(f"User '{username}' authenticated to bank server.")
+            print("Bank server authenticated to ATM.")
         nonce, tag, cipher = encrypt_AES(plaintext)
         client_socket.send(nonce + tag + cipher)
-        if 'Error' in plaintext: return authenticate_client(client_socket)
+        if 'Error' in plaintext:
+            return authenticate_client(client_socket)
         return index, False
 
 def interact(client_socket, encryption_key, mac_key, index):
     global clients
     while True:
         data = client_socket.recv(1024)
-        if not data: break
+        if not data: 
+            break
+        
+        # Print the raw encrypted data (nonce + tag + ciphertext + HMAC)
+        print("Received encrypted transaction data (hex):", data.hex())
+        
         nonce = data[:12]
         tag = data[12:28]
         cipher = data[28:-32]
         received_hmac = data[-32:]
+        
+        # Verify HMAC and print status
         if not verify_hmac(received_hmac, nonce + tag + cipher, mac_key):
-            print('Error: MAC verification failed!')
+            print("Error: MAC verification failed for transaction data:", data.hex())
             continue
+        else:
+            print("MAC verification succeeded for transaction data.")
+
+        # Decrypt the transaction message
         request = decrypt_AES(nonce, tag, cipher, string=True, decryption_key=encryption_key)
+        print("Decrypted transaction message:", request)
+        
         clients[index].account_transaction(request, encryption_key, mac_key)
-        print(f'{request}')
+        
         parts = request.split(':')
-        transaction_type, amount = parts[0], int(parts[1])
+        transaction_type = parts[0]
+        try:
+            amount = int(parts[1])
+        except Exception:
+            amount = None
+        
+        # Print protocol execution summary for each transaction
         if transaction_type == 'DEPOSIT':
+            print("Transaction Protocol: Processing DEPOSIT for amount:", amount)
             clients[index].deposit(amount)
         elif transaction_type == 'WITHDRAWAL':
+            print("Transaction Protocol: Processing WITHDRAWAL for amount:", amount)
             clients[index].withdraw(amount)
         elif transaction_type == 'INQUIRY':
+            print("Transaction Protocol: Processing INQUIRY.")
             transactions = clients[index].get_transactions()
             try:
                 for transaction in transactions:
@@ -64,6 +96,8 @@ def interact(client_socket, encryption_key, mac_key, index):
                 client_socket.send(b'END_OF_TRANSACTIONS')
             except Exception as e:
                 print(f'Error during sending of transactions: {e}')
+        else:
+            print("Transaction Protocol: Unrecognized transaction type.")
 
 def handle_client(client_socket, client_address):
 
@@ -142,7 +176,7 @@ def main():
             client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
             client_thread.start()
     except KeyboardInterrupt:
-        print("\nServer shutting down due to keyboard interrupt...")
+        print("\nServer shutting down due to keyboard interrupt")
         server_socket.close()
 
 if __name__ == '__main__':
