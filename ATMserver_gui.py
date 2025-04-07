@@ -13,8 +13,7 @@ class ConsoleRedirector:
         self.original_stdout = original_stdout
 
     def write(self, text):
-        # Write to the original stdout
-        self.original_stdout.write(text)
+        self.original_stdout.write(text) # Write to the original stdout
         # If the text is not empty log it to the GUI
         if text.strip():
             self.log_function(text.strip())
@@ -28,11 +27,15 @@ class ATMServerGUI(tk.Tk):
         self.title("Bank Server")
         self.geometry("600x400")
         
-        # Create a scrollable text widget for logs
+        # Clear the transactions file on startup
+        with open("customer_transactions.txt", "w") as f:
+            f.write("")
+        
+        # Create a scrollable text widget for logs.
         self.log_text = scrolledtext.ScrolledText(self, state='disabled', wrap='word')
         self.log_text.pack(fill='both', expand=True, padx=10, pady=10)
         
-        # Override sys.stdout so that all print messages are also sent to the GUI log
+        # Override sys.stdout so that all print messages are also sent to the GUI
         sys.stdout = ConsoleRedirector(self.log, sys.__stdout__)
         
         self.server_socket = None

@@ -22,29 +22,29 @@ class ATMClientGUI(tk.Tk):
     def create_login_frame(self):
         self.login_frame = tk.Frame(self)
         self.login_frame.pack(pady=20)
-
+        
         tk.Label(self.login_frame, text="Username:").grid(row=0, column=0, sticky="e")
         self.username_entry = tk.Entry(self.login_frame)
         self.username_entry.grid(row=0, column=1, pady=5)
-
+        
         tk.Label(self.login_frame, text="Password:").grid(row=1, column=0, sticky="e")
         self.password_entry = tk.Entry(self.login_frame, show="*")
         self.password_entry.grid(row=1, column=1, pady=5)
-
+        
         tk.Label(self.login_frame, text="New User?").grid(row=2, column=0, sticky="e")
         self.new_user_var = tk.StringVar(value="n")
         tk.Radiobutton(self.login_frame, text="Yes", variable=self.new_user_var, value="y").grid(row=2, column=1, sticky="w")
         tk.Radiobutton(self.login_frame, text="No", variable=self.new_user_var, value="n").grid(row=2, column=1, sticky="e")
-
+        
         tk.Button(self.login_frame, text="Login", command=self.handle_login).grid(row=3, column=0, columnspan=2, pady=10)
-
-        print("Login frame created. Waiting for user input...")
-
+        
+        print("Waiting for user input")
+    
     def handle_login(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
         new_user = self.new_user_var.get()
-
+        
         if self.client_socket is None:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
@@ -64,13 +64,13 @@ class ATMClientGUI(tk.Tk):
             nonce, tag, cipher = encrypt_AES(plaintext)
             print("Sending authentication message...")
             self.client_socket.send(nonce + tag + cipher)
-
+            
             data = self.client_socket.recv(1024)
             if not data:
                 self.show_error("No response from bank. Please try again.")
                 print("No data received during authentication.")
                 return
-
+            
             nonce, tag, cipher = self.extract_data(data)
             response_plaintext = decrypt_AES(nonce, tag, cipher)
             print("Received authentication response:", response_plaintext)
@@ -80,7 +80,7 @@ class ATMClientGUI(tk.Tk):
                 self.show_error("Malformed response from bank.")
                 print("Error splitting response:", e)
                 return
-
+            
             if "Error" in message:
                 if "Incorrect username" in message:
                     self.show_error("Login FAILED, incorrect username or password")
@@ -89,47 +89,46 @@ class ATMClientGUI(tk.Tk):
                     self.show_error(message)
                     print("Authentication error from bank:", message)
                 return
-
+            
             if challenge.hex() != challenge_received:
                 self.show_error("Bank authentication failed! Challenge mismatch.")
                 print("Challenge mismatch: expected", challenge.hex(), "but got", challenge_received)
                 return
-
+            
             print("Bank authenticated successfully.")
-
+            
             data = self.client_socket.recv(1024)
             nonce, tag, cipher = self.extract_data(data)
             master_secret_key = decrypt_AES(nonce, tag, cipher, string=False)
             self.master_secret_key = master_secret_key
             print("Received master secret key:", master_secret_key.hex())
-
+            
             self.encryption_key, self.mac_key = derive_keys(master_secret_key)
-            print("Derived key-set: \n Encryption key:", self.encryption_key.hex(), "\n MAC key:", self.mac_key.hex())
-
+            print("Derived key set: \n Encryption key:", self.encryption_key.hex(), "\n MAC key:", self.mac_key.hex())
+            
             self.after(0, self.create_main_menu_frame)
         except Exception as e:
             self.show_error(f"Authentication exception: {e}")
             print("Exception during authentication:", e)
-
+    
     def extract_data(self, data):
         nonce = data[:12]
         tag = data[12:28]
         cipher = data[28:]
         return nonce, tag, cipher
-
+    
     def create_main_menu_frame(self):
         self.login_frame.destroy()
         self.menu_frame = tk.Frame(self)
         self.menu_frame.pack(pady=20)
-
+        
         tk.Label(self.menu_frame, text="ATM Main Menu", font=("Helvetica", 14)).pack(pady=10)
         tk.Button(self.menu_frame, text="Deposit", command=self.deposit).pack(fill='x', padx=20, pady=5)
         tk.Button(self.menu_frame, text="Withdrawal", command=self.withdrawal).pack(fill='x', padx=20, pady=5)
         tk.Button(self.menu_frame, text="Account Inquiry", command=self.account_inquiry).pack(fill='x', padx=20, pady=5)
-        tk.Button(self.menu_frame, text="Exit", command=self.quit).pack(fill='x', padx=20, pady=5)
-
-        print("Switched to main menu.")
-
+        tk.Button(self.menu_frame, text="Logout", command=self.logout).pack(fill='x', padx=20, pady=5)
+        
+    
     def deposit(self):
         amount = self.simple_input("Deposit", "Enter deposit amount:")
         if amount is None:
@@ -138,7 +137,7 @@ class ATMClientGUI(tk.Tk):
             amount = int(amount)
         except ValueError:
             messagebox.showerror("Error", "Invalid amount")
-            print("Invalid deposit amount entered.")
+            print("Invalid deposit amount entered")
             return
         deposit_msg = f"DEPOSIT:{amount}"
         nonce, tag, cipher = encrypt_AES(deposit_msg, self.encryption_key)
@@ -156,14 +155,14 @@ class ATMClientGUI(tk.Tk):
             amount = int(amount)
         except ValueError:
             messagebox.showerror("Error", "Invalid amount")
-            print("Invalid withdrawal amount entered.")
+            print("Invalid withdrawal amount entered")
             return
         withdrawal_msg = f"WITHDRAWAL:{amount}"
         nonce, tag, cipher = encrypt_AES(withdrawal_msg, self.encryption_key)
         data = nonce + tag + cipher
         hmac_value = hmac.new(self.mac_key, data, hashlib.sha256).digest()
         self.client_socket.send(data + hmac_value)
-        messagebox.showinfo("Withdrawal", "Withdrawal request sent.")
+        messagebox.showinfo("Withdrawal", "Withdrawal request sent")
         print("Withdrawal request sent for amount:", amount)
     
     def account_inquiry(self):
@@ -172,7 +171,7 @@ class ATMClientGUI(tk.Tk):
         data = nonce + tag + cipher
         hmac_value = hmac.new(self.mac_key, data, hashlib.sha256).digest()
         self.client_socket.send(data + hmac_value)
-        print("Account inquiry request sent.")
+        print("Account inquiry request sent")
         threading.Thread(target=self.receive_transactions, daemon=True).start()
     
     def receive_transactions(self):
@@ -191,48 +190,50 @@ class ATMClientGUI(tk.Tk):
                 print("Error during receiving transactions:", e)
                 self.show_error(f"Error receiving transactions: {e}")
                 return
-
-        transactions = received_data.split(b'||')[:-1]
+        
+        transactions = [t for t in received_data.split(b'||') if t]
         balance_str = None
         other_transactions = []
-
         for transaction in transactions:
+            if len(transaction) < 12 + 16 + 32:
+                continue
             nonce = transaction[:12]
             tag = transaction[12:28]
             cipher = transaction[28:-32]
             received_hmac = transaction[-32:]
             if not verify_hmac(received_hmac, nonce + tag + cipher, self.mac_key):
-                other_transactions.append("MAC verification failed for a transaction.")
+                other_transactions.append("MAC verification failed for a transaction!")
                 continue
-
             request = decrypt_AES(nonce, tag, cipher, string=True, decryption_key=self.encryption_key)
-            if request.startswith("BALANCE:"):
-                balance_str = request
+            # Expecting message: "username || transaction || timestamp"
+            parts = request.split("||")
+            if len(parts) == 3:
+                _, trans, ts = parts
+                if trans.startswith("BALANCE:"):
+                    balance_str = trans
+                elif trans.startswith("INQUIRY:"):
+                    # Strip out the trailing ":0" if present
+                    trans = "INQUIRY"
+                    other_transactions.append(f"{trans} at {ts}")
+                else:
+                    other_transactions.append(f"{trans} at {ts}")
             else:
-                # For inquiries just show INQUIRY
-                if request.startswith("INQUIRY:"):
-                    request = "INQUIRY"
                 other_transactions.append(request)
-        
-        # Update the inquiry window with balance and transactions
         self.after(0, lambda: self.show_transactions(balance_str, "\n".join(other_transactions)))
     
     def show_transactions(self, balance, transactions_text):
         top = tk.Toplevel(self)
         top.title("Account Inquiry")
         
-        # Create a frame for the balance display (at the top)
         balance_frame = tk.Frame(top)
         balance_frame.pack(pady=10)
         if balance:
-            # Display the balance (at the top)
             balance_label = tk.Label(balance_frame, text=balance, font=("Helvetica", 16, "bold"))
             balance_label.pack()
         else:
             balance_label = tk.Label(balance_frame, text="Balance: N/A", font=("Helvetica", 16, "bold"))
             balance_label.pack()
         
-        # Create a frame for the transactions
         transactions_frame = tk.Frame(top)
         transactions_frame.pack(padx=10, pady=10, fill="both", expand=True)
         transactions_text_widget = tk.Text(transactions_frame, wrap='word', width=50, height=15)
@@ -240,7 +241,7 @@ class ATMClientGUI(tk.Tk):
         transactions_text_widget.insert('end', transactions_text)
         transactions_text_widget.config(state='disabled')
         
-        print("Account transactions received and displayed.")
+        print("Account transactions received and displayed")
     
     def simple_input(self, title, prompt):
         input_window = tk.Toplevel(self)
@@ -259,6 +260,20 @@ class ATMClientGUI(tk.Tk):
     def show_error(self, message):
         self.after(0, lambda: messagebox.showerror("Error", message))
         print("Error:", message)
+    
+    def logout(self):
+        if self.client_socket:
+            try:
+                self.client_socket.close()
+            except Exception as e:
+                print("Error closing socket during logout:", e)
+        self.client_socket = None
+        self.encryption_key = None
+        self.mac_key = None
+        self.master_secret_key = None
+        self.menu_frame.destroy()
+        self.create_login_frame()
+        print("Logged out")
 
 if __name__ == "__main__":
     app = ATMClientGUI()
